@@ -14,8 +14,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
@@ -38,14 +41,19 @@ class RecipesViewModel @Inject constructor(
                 isLoading = false, error = null
             )
         )
-    val state = _state.asStateFlow()
+    val state = _state.onStart {
+        loadRecipes()
+    }.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000L),
+        RecipesListState(
+            recipes = listOf(),
+            isLoading = false,
+            error = null
+        )
+    )
 
     private val _recipesListEvent = MutableSharedFlow<RecipesListEvent>()
     val recipesListEvent = _recipesListEvent.asSharedFlow()
-
-    init {
-        loadRecipes()
-    }
 
     private fun loadRecipes() {
         viewModelScope.launch {
@@ -57,7 +65,13 @@ class RecipesViewModel @Inject constructor(
                 }
 
                 is Result.Success -> {
-                    _state.update { it.copy(recipes = recipes.data, error = null, isLoading = false) }
+                    _state.update {
+                        it.copy(
+                            recipes = recipes.data,
+                            error = null,
+                            isLoading = false
+                        )
+                    }
                 }
             }
         }
@@ -77,7 +91,12 @@ class RecipesViewModel @Inject constructor(
                     if (messageToEncrypt != null) {
                         emitEvent(RecipesListEvent.NavigateToRecipeScreen(EncryptedData(text = messageToEncrypt)))
                     } else {
-                        _state.update { it.copy(error = DataError.Crypto.ENCRYPTION, isLoading = false) }
+                        _state.update {
+                            it.copy(
+                                error = DataError.Crypto.ENCRYPTION,
+                                isLoading = false
+                            )
+                        }
                     }
                 }
             }
